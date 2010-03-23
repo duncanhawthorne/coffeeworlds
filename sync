@@ -1,0 +1,48 @@
+#!/usr/bin/env python
+from __future__ import division #to give true division
+import os, sys
+
+"""
+Subverion sync script, for automatically issuing the correct subversion 
+commands after adding, deleting, moving, modifying files.
+Also has support for moving folders in subversion, by deleting the old 
+.svn directories, in the folder in its new position
+"""
+
+def bash(command):		
+	return os.popen(command).read().split("\n")[:-1]
+	
+directory = "."
+
+svn_stat_output = bash("svn stat "+directory)
+print(svn_stat_output)
+
+if len(sys.argv) == 1:
+	os.system('svn up')
+else:
+	if sys.argv[1] == "--upload":
+		print("just doing upload")
+
+for line in svn_stat_output:
+	status, filename = line.split("      ")
+	print(status, filename)
+	if status == "!" or status == "D":
+		print("deleting "+filename)
+		print(bash('svn del "'+filename+'"'))
+	elif status == "?":
+		print("adding "+filename)
+		output = bash('svn add "'+filename+'" 2>&1')
+		print(output)
+		if "is already under version control" in output[0]:
+			print("you moved a folder "+filename)
+			list_of_svn_dirs = []
+			for root, folder, files  in os.walk(filename):
+				if root[-4:] == ".svn":
+					list_of_svn_dirs.append(root)
+			for folder in list_of_svn_dirs:
+				bash("rm -r -f \""+folder+"\"")
+			print(bash('svn add "'+filename+'" 2>&1'))
+	elif status == "M":
+		print(filename+" has modifications")
+print("commiting, this may take a while")
+os.system("svn commit -m 'automatic repository sync' "+directory)#not bash(), as need to see feedback
